@@ -1574,3 +1574,2885 @@ Ready for production systems.
 Ready to contribute to research.
 
 You know text as data. Excellent! 🎉
+## Word2Vec Architecture Deep Dive
+
+### Skip-gram Model
+
+Goal: Predict context words from target word
+Input: Word embedding
+Output: Probability of context words
+Loss: Cross-entropy over context window
+Optimization: SGD with negative sampling
+
+### Continuous Bag of Words (CBOW)
+
+Opposite of Skip-gram
+Input: Context words
+Output: Predict center word
+Faster training than skip-gram
+Better for frequent words
+Trade-off: Slightly lower quality
+
+### Negative Sampling
+
+Full softmax: O(V) expensive
+Negative sampling: Sample K negative examples
+Binary logistic regression instead
+K typical values: 5-15
+Faster: O(K) vs O(V)
+Works surprisingly well!
+
+### Hierarchical Softmax
+
+Binary tree over vocabulary
+Depth: O(log V)
+Path probability product
+Better for rare words
+Slower than negative sampling
+Historical importance
+
+### Subword Information
+
+FastText improvement
+Represent as sum of character n-grams
+Handle OOV words (morphology)
+Example: "running" = run + ing + ...n-grams
+Better performance on morphologically rich languages
+Handle misspellings gracefully
+
+## GloVe: Global Vectors
+
+### Motivation
+
+Word2Vec: Local context only
+GloVe: Global corpus statistics + local context
+Matrix factorization approach
+Combine benefits of both
+Excellent empirical results
+
+### Co-occurrence Matrix
+
+Count word co-occurrences in context window
+V x V matrix (V = vocab size)
+X_ij = count of word i with word j in context
+Sparse: ~0.1% non-zero typical
+Compress via SVD (but loses info)
+
+### GloVe Loss Function
+
+Weighted least squares
+Loss = Σ f(X_ij) * (w_i · w_j + b_i + b_j - log X_ij)^2
+f(X_ij): Weighting function (dampens rare pairs)
+Global statistics captured
+Better on analogies than Word2Vec
+
+### Word Analogies
+
+Test: king - man + woman = queen
+Equation: w_king - w_man + w_woman ≈ w_queen
+Linear relationships in embedding space
+Remarkable property!
+GloVe better than Word2Vec on this
+But both still imperfect
+
+### Context-dependent vs Static
+
+Word2Vec/GloVe: Single vector per word
+Problem: Homonyms (bank = river vs institution)
+One vector can't capture both
+Solution: Contextualized embeddings (ELMo, BERT)
+Modern approach: Dynamic based on context
+
+## ELMo: Embeddings from Language Models
+
+### Key Insight
+
+Train bidirectional LSTM language model
+Extract hidden states
+Weighted combination = ELMo
+Context-dependent (solves homonym problem)
+Transfer learning: Improves downstream tasks
+
+### Bidirectional Language Model
+
+Forward: Predict word from left context
+Backward: Predict word from right context
+Both directions: Full context
+LSTM layers: 2 (original ELMo)
+Hidden size: 4096
+Fast: ~1B token corpus
+
+### Representation Extraction
+
+Layer 1: Character convolutions
+Layers 2-3: Biphone LSTM
+Extract: All 3 layer outputs
+Concatenate: [char, lstm1, lstm2]
+Weighted sum: λ * (γ * Σ s_k * h_k)
+λ, γ, s_k: Task-specific learnable
+
+### Fine-tuning Process
+
+Downstream task: NER, SRL, etc.
+Freeze ELMo weights
+Learn weights for layer combination
+Concatenate ELMo with task embeddings
+Results: +2-4% F1 improvement typical
+
+### Limitations
+
+Slow: 1100M parameters
+RNN-based: Sequential (not parallelizable)
+Training time: 1-2 weeks
+Next: Transformers (faster, better)
+But ELMo was breakthrough (2018)
+
+## BERT: Bidirectional Encoder Representations from Transformers
+
+### Pre-training Objectives
+
+1. Masked Language Model (MLM)
+   - Replace 15% tokens with [MASK]
+   - Predict original token
+   - 80% [MASK], 10% random, 10% original
+2. Next Sentence Prediction (NSP)
+   - Given 2 sentences
+   - Predict if adjacent in corpus
+   - Binary classification
+
+### Why Masking Works
+
+Bidirectional context: See all words
+Force model to understand meaning
+Not cheating with position info
+Deeper representations learned
+Unlike GPT (causal, left-to-right)
+
+### Pre-training Details
+
+Corpus: BookCorpus + Wikipedia
+3.3B tokens total
+Vocab: 30K WordPiece tokens
+Training: 16 TPUs, 4 days
+Batch: 256 (large!)
+Optimizer: Adam, LR=1e-4
+
+### Fine-tuning
+
+Add task-specific head
+Train 2-4 epochs
+Learning rate: 2e-5 (small!)
+Batch: 16-32
+Results: SOTA on GLUE
+Simple but effective
+
+### Variants
+
+RoBERTa: Better pre-training (improved +1-3% accuracy)
+ALBERT: Shared parameters (smaller)
+DistilBERT: 40% smaller, 60% faster
+ELECTRA: Different pre-training objective
+Hundreds of variants now
+
+## GPT: Generative Pre-trained Transformer
+
+### Causal Language Modeling
+
+Predict next token given history
+P(w_t | w_1, ..., w_{t-1})
+Autoregressive: Generate token by token
+Masked attention: Can't see future
+Simple but powerful objective
+
+### Differences from BERT
+
+BERT: Masked, bidirectional (understand)
+GPT: Causal, left-to-right (generate)
+BERT: Encoder-only (no generation)
+GPT: Decoder-only (can generate)
+Different strengths for different tasks
+
+### Scaling Laws
+
+Compute = 6ND (N=params, D=data tokens)
+Loss ∝ N^(-a) where a ≈ 0.07-0.1
+Language model scaling shows predictable trends
+GPT-2: 1.5B params, impressive
+GPT-3: 175B params, few-shot magic
+Emergent abilities at scale
+
+### Few-shot Learning
+
+GPT-3: No fine-tuning needed
+Task definition in prompt
+Examples: 0-shot, 1-shot, few-shot
+Works on translation, QA, reasoning
+Remarkable generalization
+
+### In-context Learning
+
+Implicit fine-tuning in prompt
+Model adapts to examples
+No gradient updates
+Purely in-context (during forward pass)
+Mysterious mechanism (active research)
+
+## Instruction Tuning and Alignment
+
+### The Problem
+
+GPT-3: Powerful but unpredictable
+Can refuse tasks or be verbose
+Harmful outputs possible
+Solution: Fine-tune on instructions
+Instruction-following is learnable skill
+
+### Data Collection
+
+Human-written instructions
+Each with expected output
+High quality: ~100K examples
+Diversity: Many task types
+Costs: $100K+ for good data
+Or use model-generated (weaker)
+
+### Training Process
+
+Fine-tune base model on instructions
+2-5 epochs typical
+Learning rate: 1e-5 (small)
+Quick: 1-2 hours on single GPU
+Huge effect on capability
+ChatGPT: Fine-tuned GPT-3.5
+
+### Reinforcement Learning from Human Feedback
+
+Step 1: Collect comparisons
+Step 2: Train reward model
+Step 3: Use PPO to optimize
+Step 4: Generate better outputs
+Iterative improvement
+ChatGPT training approach
+
+### Safety and Alignment
+
+Constitutional AI: Principles-based
+Red-teaming: Test for failures
+Adversarial examples: Find weaknesses
+Ongoing challenge
+No silver bullet yet
+Active research area (critical!)
+
+## Prompt Engineering
+
+### Zero-shot Prompting
+
+No examples, just instructions
+Simple case
+Works surprisingly often
+Baseline for comparison
+Limits: Complex tasks fail
+
+### Few-shot Prompting
+
+Provide 1-5 examples
+Model learns pattern from examples
+Not actual fine-tuning
+In-context learning
+Often better than zero-shot
+
+### Chain-of-Thought
+
+Ask model to reason step-by-step
+Improves accuracy on math +40%
+Works with few examples
+Forces explicit reasoning
+Slower inference (longer)
+But higher quality
+
+### Self-Consistency
+
+Generate multiple reasoning paths
+Take majority vote
+Improves accuracy on complex tasks
+Cost: K times slower inference
+K=5 typical (5x cost, 5-10% accuracy gain)
+
+### Prompt Optimization
+
+Gradient-based: LLM-based optimization
+Discrete: Genetic algorithms
+Manual: Human expertise
+Prompt templates: Reusable patterns
+Active research: AutoPrompt, etc.
+
+## Semantic Search and Dense Retrieval
+
+### Dense Passage Retrieval
+
+Encode queries and documents
+Retrieve by similarity
+FAISS: Fast similarity search
+100M documents: Milliseconds
+Much better than BM25 keyword matching
+
+### Bi-Encoders
+
+Query encoder and document encoder
+Independent (can batch both separately)
+Fast inference
+Similarity: Dot product or cosine
+Usually good enough
+
+### Cross-Encoders
+
+Jointly encode query and document
+Higher quality than bi-encoder
+Slower: Must evaluate all pairs
+Use as re-ranker
+Workflow: Bi-encoder → cross-encoder
+
+### Contrastive Learning
+
+Positive: Query with relevant doc
+Negative: Query with irrelevant doc
+Loss: Maximize positive, minimize negative
+SimCLR: Self-supervised version
+Data efficient
+
+### Knowledge Distillation for Search
+
+Large cross-encoder → small bi-encoder
+Student learns from teacher
+Fast inference with quality
+Production approach
+Typical: 5x speedup, 90% quality
+
+## Word2Vec Architecture Deep Dive
+
+### Skip-gram Model
+
+Goal: Predict context words from target word
+Input: Word embedding
+Output: Probability of context words
+Loss: Cross-entropy over context window
+Optimization: SGD with negative sampling
+
+### Continuous Bag of Words (CBOW)
+
+Opposite of Skip-gram
+Input: Context words
+Output: Predict center word
+Faster training than skip-gram
+Better for frequent words
+Trade-off: Slightly lower quality
+
+### Negative Sampling
+
+Full softmax: O(V) expensive
+Negative sampling: Sample K negative examples
+Binary logistic regression instead
+K typical values: 5-15
+Faster: O(K) vs O(V)
+Works surprisingly well!
+
+### Hierarchical Softmax
+
+Binary tree over vocabulary
+Depth: O(log V)
+Path probability product
+Better for rare words
+Slower than negative sampling
+Historical importance
+
+### Subword Information
+
+FastText improvement
+Represent as sum of character n-grams
+Handle OOV words (morphology)
+Example: "running" = run + ing + ...n-grams
+Better performance on morphologically rich languages
+Handle misspellings gracefully
+
+## GloVe: Global Vectors
+
+### Motivation
+
+Word2Vec: Local context only
+GloVe: Global corpus statistics + local context
+Matrix factorization approach
+Combine benefits of both
+Excellent empirical results
+
+### Co-occurrence Matrix
+
+Count word co-occurrences in context window
+V x V matrix (V = vocab size)
+X_ij = count of word i with word j in context
+Sparse: ~0.1% non-zero typical
+Compress via SVD (but loses info)
+
+### GloVe Loss Function
+
+Weighted least squares
+Loss = Σ f(X_ij) * (w_i · w_j + b_i + b_j - log X_ij)^2
+f(X_ij): Weighting function (dampens rare pairs)
+Global statistics captured
+Better on analogies than Word2Vec
+
+### Word Analogies
+
+Test: king - man + woman = queen
+Equation: w_king - w_man + w_woman ≈ w_queen
+Linear relationships in embedding space
+Remarkable property!
+GloVe better than Word2Vec on this
+But both still imperfect
+
+### Context-dependent vs Static
+
+Word2Vec/GloVe: Single vector per word
+Problem: Homonyms (bank = river vs institution)
+One vector can't capture both
+Solution: Contextualized embeddings (ELMo, BERT)
+Modern approach: Dynamic based on context
+
+## Word2Vec Architecture Deep Dive
+
+### Skip-gram Model
+
+Goal: Predict context words from target word
+Input: Word embedding
+Output: Probability of context words
+Loss: Cross-entropy over context window
+Optimization: SGD with negative sampling
+
+### Continuous Bag of Words (CBOW)
+
+Opposite of Skip-gram
+Input: Context words
+Output: Predict center word
+Faster training than skip-gram
+Better for frequent words
+Trade-off: Slightly lower quality
+
+### Negative Sampling
+
+Full softmax: O(V) expensive
+Negative sampling: Sample K negative examples
+Binary logistic regression instead
+K typical values: 5-15
+Faster: O(K) vs O(V)
+Works surprisingly well!
+
+### Hierarchical Softmax
+
+Binary tree over vocabulary
+Depth: O(log V)
+Path probability product
+Better for rare words
+Slower than negative sampling
+Historical importance
+
+### Subword Information
+
+FastText improvement
+Represent as sum of character n-grams
+Handle OOV words (morphology)
+Example: "running" = run + ing + ...n-grams
+Better performance on morphologically rich languages
+Handle misspellings gracefully
+
+## GloVe: Global Vectors
+
+### Motivation
+
+Word2Vec: Local context only
+GloVe: Global corpus statistics + local context
+Matrix factorization approach
+Combine benefits of both
+Excellent empirical results
+
+### Co-occurrence Matrix
+
+Count word co-occurrences in context window
+V x V matrix (V = vocab size)
+X_ij = count of word i with word j in context
+Sparse: ~0.1% non-zero typical
+Compress via SVD (but loses info)
+
+### GloVe Loss Function
+
+Weighted least squares
+Loss = Σ f(X_ij) * (w_i · w_j + b_i + b_j - log X_ij)^2
+f(X_ij): Weighting function (dampens rare pairs)
+Global statistics captured
+Better on analogies than Word2Vec
+
+### Word Analogies
+
+Test: king - man + woman = queen
+Equation: w_king - w_man + w_woman ≈ w_queen
+Linear relationships in embedding space
+Remarkable property!
+GloVe better than Word2Vec on this
+But both still imperfect
+
+### Context-dependent vs Static
+
+Word2Vec/GloVe: Single vector per word
+Problem: Homonyms (bank = river vs institution)
+One vector can't capture both
+Solution: Contextualized embeddings (ELMo, BERT)
+Modern approach: Dynamic based on context
+
+## ELMo: Embeddings from Language Models
+
+### Key Insight
+
+Train bidirectional LSTM language model
+Extract hidden states
+Weighted combination = ELMo
+Context-dependent (solves homonym problem)
+Transfer learning: Improves downstream tasks
+
+### Bidirectional Language Model
+
+Forward: Predict word from left context
+Backward: Predict word from right context
+Both directions: Full context
+LSTM layers: 2 (original ELMo)
+Hidden size: 4096
+Fast: ~1B token corpus
+
+### Representation Extraction
+
+Layer 1: Character convolutions
+Layers 2-3: Biphone LSTM
+Extract: All 3 layer outputs
+Concatenate: [char, lstm1, lstm2]
+Weighted sum: λ * (γ * Σ s_k * h_k)
+λ, γ, s_k: Task-specific learnable
+
+### Fine-tuning Process
+
+Downstream task: NER, SRL, etc.
+Freeze ELMo weights
+Learn weights for layer combination
+Concatenate ELMo with task embeddings
+Results: +2-4% F1 improvement typical
+
+### Limitations
+
+Slow: 1100M parameters
+RNN-based: Sequential (not parallelizable)
+Training time: 1-2 weeks
+Next: Transformers (faster, better)
+But ELMo was breakthrough (2018)
+
+## BERT: Bidirectional Encoder Representations from Transformers
+
+### Pre-training Objectives
+
+1. Masked Language Model (MLM)
+   - Replace 15% tokens with [MASK]
+   - Predict original token
+   - 80% [MASK], 10% random, 10% original
+2. Next Sentence Prediction (NSP)
+   - Given 2 sentences
+   - Predict if adjacent in corpus
+   - Binary classification
+
+### Why Masking Works
+
+Bidirectional context: See all words
+Force model to understand meaning
+Not cheating with position info
+Deeper representations learned
+Unlike GPT (causal, left-to-right)
+
+### Pre-training Details
+
+Corpus: BookCorpus + Wikipedia
+3.3B tokens total
+Vocab: 30K WordPiece tokens
+Training: 16 TPUs, 4 days
+Batch: 256 (large!)
+Optimizer: Adam, LR=1e-4
+
+### Fine-tuning
+
+Add task-specific head
+Train 2-4 epochs
+Learning rate: 2e-5 (small!)
+Batch: 16-32
+Results: SOTA on GLUE
+Simple but effective
+
+### Variants
+
+RoBERTa: Better pre-training (improved +1-3% accuracy)
+ALBERT: Shared parameters (smaller)
+DistilBERT: 40% smaller, 60% faster
+ELECTRA: Different pre-training objective
+Hundreds of variants now
+
+## GPT: Generative Pre-trained Transformer
+
+### Causal Language Modeling
+
+Predict next token given history
+P(w_t | w_1, ..., w_{t-1})
+Autoregressive: Generate token by token
+Masked attention: Can't see future
+Simple but powerful objective
+
+### Differences from BERT
+
+BERT: Masked, bidirectional (understand)
+GPT: Causal, left-to-right (generate)
+BERT: Encoder-only (no generation)
+GPT: Decoder-only (can generate)
+Different strengths for different tasks
+
+### Scaling Laws
+
+Compute = 6ND (N=params, D=data tokens)
+Loss ∝ N^(-a) where a ≈ 0.07-0.1
+Language model scaling shows predictable trends
+GPT-2: 1.5B params, impressive
+GPT-3: 175B params, few-shot magic
+Emergent abilities at scale
+
+### Few-shot Learning
+
+GPT-3: No fine-tuning needed
+Task definition in prompt
+Examples: 0-shot, 1-shot, few-shot
+Works on translation, QA, reasoning
+Remarkable generalization
+
+### In-context Learning
+
+Implicit fine-tuning in prompt
+Model adapts to examples
+No gradient updates
+Purely in-context (during forward pass)
+Mysterious mechanism (active research)
+
+## Instruction Tuning and Alignment
+
+### The Problem
+
+GPT-3: Powerful but unpredictable
+Can refuse tasks or be verbose
+Harmful outputs possible
+Solution: Fine-tune on instructions
+Instruction-following is learnable skill
+
+### Data Collection
+
+Human-written instructions
+Each with expected output
+High quality: ~100K examples
+Diversity: Many task types
+Costs: $100K+ for good data
+Or use model-generated (weaker)
+
+### Training Process
+
+Fine-tune base model on instructions
+2-5 epochs typical
+Learning rate: 1e-5 (small)
+Quick: 1-2 hours on single GPU
+Huge effect on capability
+ChatGPT: Fine-tuned GPT-3.5
+
+### Reinforcement Learning from Human Feedback
+
+Step 1: Collect comparisons
+Step 2: Train reward model
+Step 3: Use PPO to optimize
+Step 4: Generate better outputs
+Iterative improvement
+ChatGPT training approach
+
+### Safety and Alignment
+
+Constitutional AI: Principles-based
+Red-teaming: Test for failures
+Adversarial examples: Find weaknesses
+Ongoing challenge
+No silver bullet yet
+Active research area (critical!)
+
+## Prompt Engineering
+
+### Zero-shot Prompting
+
+No examples, just instructions
+Simple case
+Works surprisingly often
+Baseline for comparison
+Limits: Complex tasks fail
+
+### Few-shot Prompting
+
+Provide 1-5 examples
+Model learns pattern from examples
+Not actual fine-tuning
+In-context learning
+Often better than zero-shot
+
+### Chain-of-Thought
+
+Ask model to reason step-by-step
+Improves accuracy on math +40%
+Works with few examples
+Forces explicit reasoning
+Slower inference (longer)
+But higher quality
+
+### Self-Consistency
+
+Generate multiple reasoning paths
+Take majority vote
+Improves accuracy on complex tasks
+Cost: K times slower inference
+K=5 typical (5x cost, 5-10% accuracy gain)
+
+### Prompt Optimization
+
+Gradient-based: LLM-based optimization
+Discrete: Genetic algorithms
+Manual: Human expertise
+Prompt templates: Reusable patterns
+Active research: AutoPrompt, etc.
+
+## Semantic Search and Dense Retrieval
+
+### Dense Passage Retrieval
+
+Encode queries and documents
+Retrieve by similarity
+FAISS: Fast similarity search
+100M documents: Milliseconds
+Much better than BM25 keyword matching
+
+### Bi-Encoders
+
+Query encoder and document encoder
+Independent (can batch both separately)
+Fast inference
+Similarity: Dot product or cosine
+Usually good enough
+
+### Cross-Encoders
+
+Jointly encode query and document
+Higher quality than bi-encoder
+Slower: Must evaluate all pairs
+Use as re-ranker
+Workflow: Bi-encoder → cross-encoder
+
+### Contrastive Learning
+
+Positive: Query with relevant doc
+Negative: Query with irrelevant doc
+Loss: Maximize positive, minimize negative
+SimCLR: Self-supervised version
+Data efficient
+
+### Knowledge Distillation for Search
+
+Large cross-encoder → small bi-encoder
+Student learns from teacher
+Fast inference with quality
+Production approach
+Typical: 5x speedup, 90% quality
+
+## Question Answering: End-to-end Systems
+
+### Retrieval-Augmented QA
+
+1. Retrieve relevant passages
+2. Extract answer from passages
+3. Rank candidate answers
+Splits problem into modules
+Each can be optimized separately
+Very effective approach
+
+### Open-domain QA
+
+Answer using entire Wikipedia
+Retrieve: BM25 or dense
+Extract: BERT span extraction
+Challenge: Scale and accuracy
+Modern: Dense + BERT = SOTA
+
+### Machine Reading Comprehension
+
+Given passage and question
+Extract answer span
+Datasets: SQuAD, MS MARCO
+BERT: 92.5% F1 (vs 91.5% human)
+Problem solved for RC!
+
+### Multi-hop QA
+
+Question requires multiple steps
+Example: "Who is the parent of X's child?"
+Harder: Needs reasoning
+Datasets: HotpotQA
+Current performance: 65-70% F1
+Open problem
+
+### Conversational QA
+
+Keep context from previous turns
+Coreference resolution needed
+CoQA, QuAC datasets
+Harder than single-turn
+Context modeling crucial
+
+### Context-dependent vs Static
+
+Word2Vec and GloVe single vector per word
+Problem: Homonyms (bank = river vs institution)
+One vector cannot capture both meanings
+Solution: Contextualized embeddings via ELMo, BERT
+Modern approach: Dynamic based on surrounding context
+
+## ELMo: Embeddings from Language Models
+
+### Key Insight
+
+Train bidirectional LSTM language model
+Extract hidden states at each layer
+Weighted combination creates ELMo representation
+Context-dependent solves homonym problem
+Transfer learning improves downstream tasks
+
+### Bidirectional Language Model
+
+Forward pass: Predict word from left context
+Backward pass: Predict word from right context
+Combined: Use both directions for full context
+LSTM layers: 2 stacked layers
+Hidden size: 4096
+Train on 1B token corpus
+
+### Representation Extraction
+
+Layer 1: Character convolutions
+Layers 2-3: Biphone LSTM outputs
+Extract all 3 layer representations
+Concatenate: [char_embed, lstm1, lstm2]
+Weighted combination: gamma * (s0*h0 + s1*h1 + s2*h2)
+Task-specific learnable weights
+
+### Fine-tuning Process
+
+Downstream task: NER, SRL, classification
+Freeze ELMo weights from pretraining
+Learn layer combination weights
+Concatenate ELMo with task embeddings
+Results: Plus 2-4 percent F1 improvement typical
+
+### Limitations of ELMo
+
+Very slow: 1100M parameters
+RNN-based: Sequential processing, not parallelizable
+Training time: Requires 1-2 weeks
+Next evolution: Transformers are faster, better
+But ELMo was breakthrough in 2018
+
+## BERT: Bidirectional Encoder Representations
+
+### Pre-training Objectives
+
+1. Masked Language Model (MLM)
+   Replace 15 percent tokens with MASK
+   Task: Predict original token
+   Distribution: 80 percent MASK, 10 percent random, 10 percent original
+2. Next Sentence Prediction (NSP)
+   Given two sentences
+   Predict if adjacent in corpus
+   Binary classification task
+
+### Why Masking Works
+
+Bidirectional context: Model sees all words
+Forces deep understanding of meaning
+Cannot cheat using position information
+Results in deeper learned representations
+Unlike GPT which uses causal masking
+
+### Pre-training Details
+
+Corpus: BookCorpus plus Wikipedia
+Total tokens: 3.3B tokens
+Vocabulary: 30K WordPiece tokens
+Training hardware: 16 TPUs
+Training time: Approximately 4 days
+Batch size: 256 (very large)
+Optimizer: Adam with LR=1e-4
+
+### Fine-tuning
+
+Add task-specific layer
+Training: 2-4 epochs
+Learning rate: 2e-5 (very small)
+Batch: 16-32
+Results: State of art on GLUE benchmark
+Simple yet effective approach
+
+### BERT Variants
+
+RoBERTa: Improved pretraining, plus 1-3 percent
+ALBERT: Shared parameters, smaller model
+DistilBERT: 40 percent smaller, 60 percent faster
+ELECTRA: Different pretraining objective
+Hundreds of variants available now
+
+## GPT: Generative Pre-trained Transformer
+
+### Causal Language Modeling
+
+Task: Predict next token given history
+Formula: P(word_t given word_1 through word_{t-1})
+Autoregressive: Generate one token at a time
+Masked attention: Cannot see future tokens
+Simple objective but very powerful
+
+### Differences from BERT
+
+BERT: Masked, bidirectional, for understanding
+GPT: Causal, left-to-right, for generation
+BERT: Encoder-only, cannot generate sequences
+GPT: Decoder-only, can generate text
+Different strengths for different tasks
+
+### Scaling Laws
+
+Compute budget: 6ND where N params, D data
+Loss curve: Decreases as N to power negative-a
+a value: Approximately 0.07 to 0.1
+Predictable scaling trends observed
+GPT-2: 1.5B params very impressive
+GPT-3: 175B params shows few-shot abilities
+Emergent abilities appear at scale
+
+### Few-shot Learning
+
+GPT-3 needs no fine-tuning
+Task definition in prompt text
+Examples: Zero-shot, one-shot, few-shot
+Works on translation, QA, reasoning
+Remarkable generalization shown
+
+### In-context Learning
+
+Implicit fine-tuning via prompt
+Model adapts to examples in context
+No gradient updates needed
+Pure in-context during forward pass
+Mechanism still under investigation
+
+## Instruction Tuning and Alignment
+
+### The Problem
+
+GPT-3: Powerful but unpredictable output
+Can refuse tasks or be verbose
+Harmful outputs possible sometimes
+Solution: Fine-tune on instructions
+Instruction-following is learnable
+
+### Data Collection
+
+Human-written high-quality instructions
+Each with expected output response
+High quality: Approximately 100K examples
+Diversity: Many different task types
+Cost: USD 100K plus for good data
+Alternative: Use model-generated data
+
+### Training Process
+
+Fine-tune base model on instructions
+Epochs: 2-5 typical
+Learning rate: 1e-5 (very small)
+Training speed: 1-2 hours one GPU
+Massive effect on model capability
+ChatGPT: Fine-tuned GPT-3.5
+
+### Reinforcement Learning from Human Feedback
+
+Step 1: Collect comparison annotations
+Step 2: Train reward model
+Step 3: Use PPO algorithm
+Step 4: Generate improved outputs
+Iterative improvement cycle
+ChatGPT uses this training approach
+
+### Safety and Alignment
+
+Constitutional AI: Principles-based approach
+Red-teaming: Test for failures
+Adversarial examples: Find weaknesses
+Ongoing research challenge
+No silver bullet solution yet
+Critical active research area
+
+## Semantic Search and Dense Retrieval
+
+### Dense Passage Retrieval
+
+Encode queries and documents
+Retrieve by similarity in embedding space
+FAISS: Fast similarity search library
+100M documents: Milliseconds latency
+Much better than BM25 keyword matching
+
+### Bi-Encoders
+
+Query encoder and document encoder
+Independent networks (can batch separately)
+Fast inference at scale
+Similarity: Dot product or cosine
+Usually sufficient quality
+
+### Cross-Encoders
+
+Jointly encode query and document
+Higher quality than bi-encoder
+Slower: Must evaluate all pairs
+Use as re-ranker after bi-encoder
+Workflow: Bi-encoder then cross-encoder
+
+### Contrastive Learning
+
+Positive: Query with relevant doc
+Negative: Query with irrelevant doc
+Loss: Maximize positive, minimize negative
+SimCLR: Self-supervised version
+Data efficient approach
+
+### Knowledge Distillation for Search
+
+Large cross-encoder teaches small bi-encoder
+Student learns from teacher
+Fast inference with good quality
+Production approach
+Typical: 5x speedup, 90 percent quality
+
+## Question Answering: End-to-end Systems
+
+### Retrieval-Augmented QA
+
+1. Retrieve relevant passages
+2. Extract answer from passages
+3. Rank candidate answers
+Splits into modular components
+Each can be optimized separately
+Very effective approach
+
+### Open-domain QA
+
+Answer using entire Wikipedia
+Retrieve: BM25 or dense retrieval
+Extract: BERT span extraction
+Challenges: Scale and accuracy
+Modern: Dense plus BERT equals SOTA
+
+### Machine Reading Comprehension
+
+Given passage and question
+Extract answer span
+Datasets: SQuAD, MS MARCO
+BERT: 92.5 percent F1 (vs 91.5 human)
+Problem essentially solved
+
+### Multi-hop QA
+
+Question requires multiple reasoning steps
+Example: Who is parent of someone's child?
+Harder: Requires chained reasoning
+Datasets: HotpotQA
+Current performance: 65-70 percent F1
+Still open problem
+
+### Conversational QA
+
+Keep context from previous turns
+Coreference resolution needed
+CoQA, QuAC datasets
+Harder than single-turn QA
+Context modeling is crucial
+
+## Abstractive and Extractive Summarization
+
+### Extractive Summarization
+
+Select important sentences
+Combine into summary
+Preserves original wording
+Simple: Score each sentence
+Fast and stable
+
+### Abstractive Summarization
+
+Generate new summary text
+Paraphrase and compress
+More flexible than extractive
+Seq2seq models: Encode-decode
+Transformers: Much better than RNNs
+
+### Evaluation Metrics
+
+ROUGE: Recall-oriented understudy
+BLEU: Machine translation metric
+METEOR: Alignment-based metric
+Human evaluation: Gold standard
+Automatic metrics imperfect
+
+### Pre-trained Models
+
+BART: Denoising autoencoder
+T5: Text-to-text transfer transformer
+PEGASUS: Pre-trained for summarization
+PGN: Pointer generator networks
+Copy mechanism important
+
+### Fine-tuning for Summarization
+
+Datasets: CNN/DailyMail, Gigaword
+Learning rate: Small like classification
+Beam search: K=4 typical
+Length penalties: Prevent too short
+Results: SOTA on standard benchmarks
+
+## Neural Machine Translation
+
+### Sequence-to-Sequence Architecture
+
+Encoder: Read source sentence
+Decoder: Generate target sentence
+Attention: Focus on relevant parts
+Better than phrase-based SMT
+Transformers: Major breakthrough
+
+### Multilingual Translation
+
+Single model for many language pairs
+Language token: Mark source and target
+Shared vocabulary across languages
+Parameter sharing reduces model size
+Transfer between languages
+
+### Back-translation
+
+Synthetic data augmentation
+Translate target to source
+Use as additional training
+Doubles training data
+Improves performance significantly
+
+### Evaluation of Translation
+
+BLEU: Automatic metric
+Limitations: Not perfect
+Human evaluation: Best
+TER: Translation edit rate
+METEOR: Better alignment
+
+### Deployment
+
+Inference: Left-to-right generation
+Beam search: K=5 typical
+Length penalty: Adjust output length
+Latency: Critical for production
+Batching increases throughput
+
+## Named Entity Recognition
+
+### Task Definition
+
+Tag each token with entity type
+Categories: PERSON, LOCATION, ORG, O
+Sequence labeling task
+Dataset: CoNLL, ACE
+Challenging for nested entities
+
+### Models
+
+BiLSTM-CRF: Previous SOTA
+BERT: Better with fine-tuning
+RoBERTa: Even better
+Character embeddings help
+Contextualization crucial
+
+### CRF Layer
+
+Conditional random field
+Sequence-level modeling
+Enforce valid tag sequences
+Example: No O after B
+Improves accuracy
+
+### Datasets
+
+CoNLL 2003: English, German
+ACE: Diverse text sources
+OntoNotes: Rich annotation
+WNUT: Noisy social media
+Cross-domain challenge
+
+### Performance
+
+SOTA: 92-93 percent F1
+BERT: Much improvement
+Nested NER: Still harder
+Zero-shot: Transfer learning
+Language-specific variants
+
+## Sentiment Analysis
+
+### Binary vs Multi-class
+
+Binary: Positive or negative
+Multi-class: 5-point scale
+Fine-grained: Aspect-based
+Multi-label: Multiple sentiments
+Task selection matters
+
+### Challenges
+
+Sarcasm and irony
+Domain transfer: Product to movie
+Implicit sentiment
+Neutral/mixed reviews
+Context dependency
+
+### Models
+
+BERT fine-tuning: Simple, effective
+Aspect-based: Target-specific
+Transfer learning: Domain adaptation
+Ensemble: Multiple models
+Results: 90+ percent accuracy
+
+### Datasets
+
+Stanford Sentiment: Movie reviews
+SemEval: Shared tasks
+SST: Parse tree annotations
+Product reviews: Various domains
+Tweet sentiment: Noisy social media
+
+### Aspect-based Sentiment
+
+Sentiment toward specific aspect
+Example: Restaurant decor negative
+But service positive
+Joint extraction and classification
+Fine-grained analysis
+
+## Text Classification
+
+### Categories
+
+Topic classification
+Spam detection
+Toxic comment detection
+Emotion classification
+Intent prediction
+
+### Approaches
+
+Bag of words: Simple baseline
+TF-IDF: Weight important words
+RNN: Preserve order
+CNN: Local patterns
+Transformers: State of art
+
+### BERT for Classification
+
+Add classification head
+CLS token: Document representation
+Fine-tune 2-5 epochs
+Learning rate: 2e-5
+Simple and effective
+
+### Multi-label Classification
+
+Each document multiple labels
+Example: Movie has comedy and drama
+Loss: Binary cross-entropy per label
+Threshold per label
+More complex than single-label
+
+### Hierarchical Classification
+
+Labels form hierarchy
+Coarse and fine categories
+Leverage hierarchy
+Constrain predictions
+Better with structure
+
+## Information Extraction
+
+### Relation Extraction
+
+Extract relationships between entities
+Example: Company founded by person
+Slot filling
+Knowledge base construction
+Can be supervised or distant
+
+### Event Extraction
+
+Extract event mentions
+Participants (who, what, where)
+Temporal information (when)
+Event type and subtypes
+Complex task
+
+### Coreference Resolution
+
+Link mentions to same entity
+Pronouns: He, she, it
+Noun phrases: The company
+Challenge: Ambiguity
+Graph-based and span-based methods
+
+### Dependency Parsing
+
+Extract grammatical structure
+Subject, object, modifiers
+Arc classification
+Dependency labels
+Useful for downstream tasks
+
+### Semantic Role Labeling
+
+Identify semantic roles
+Agent, patient, location
+Per predicate
+Proposition banks
+Improved by contextualized embeddings
+
+## Vision-Language Models
+
+### Motivation
+
+Images and text often together
+Single model for both modalities
+Enables new capabilities
+Example: Image captioning
+Cross-modal retrieval
+
+### CLIP: Contrastive Learning
+
+Image encoder and text encoder
+Contrastive loss: Match image-text pairs
+Zero-shot image classification
+Remarkably effective
+Foundation for many models
+
+### Vision Transformers
+
+Apply transformers to images
+Patch embedding: 16x16 patches
+Linear projection to embeddings
+Then standard transformer
+Competitive with CNNs
+
+### Image Captioning
+
+Encoder-decoder architecture
+CNN or ViT encoder
+Transformer decoder
+Generates image description
+Datasets: COCO, Flickr30K
+
+### Visual Question Answering
+
+Answer questions about images
+Both image and text reasoning
+Fusion of modalities
+VQA dataset
+Challenging task
+
+## Graph Neural Networks for NLP
+
+### Motivation
+
+Text has graph structure
+Dependency trees
+Knowledge graphs
+Entity relations
+GNNs capture structure
+
+### Graph Convolutional Networks
+
+Aggregate neighbor information
+h_i = sigma(sum_j W * h_j)
+Multiple layers
+Captures local structure
+Used for semantic role labeling
+
+### Knowledge Graph Embeddings
+
+Represent entities and relations
+Triple-based: (h, r, t)
+Score function: Measure correctness
+TransE: Simple baseline
+Link prediction
+
+### Text as Graphs
+
+Dependency parsing: Syntactic structure
+Semantic graphs: Meaning
+GNNs improve over linear models
+Example: Improved NER
+Structure helps
+
+### Message Passing
+
+Nodes exchange information
+Learnable message functions
+Aggregation of messages
+Update node representations
+Flexible framework
+
+## Conversational AI and Dialogue
+
+### Task Definition
+
+Generate relevant responses
+Given conversation history
+Open-domain chitchat
+Task-oriented dialogue
+Different challenges
+
+### Response Generation
+
+Sequence-to-sequence models
+Encoder: Conversation context
+Decoder: Generate response
+Attention important
+Beam search for decoding
+
+### Evaluation
+
+Automatic metrics: BLEU, ROUGE
+Limitations: Imperfect correlation
+Human evaluation: Gold standard
+Dimensions: Relevance, coherence
+Informativeness
+
+### Personalization
+
+User persona: Consistent personality
+Persona description
+Condition response generation
+PersonaChat dataset
+More engaging
+
+### Goal-oriented Dialogue
+
+Slot filling: Extract information
+Dialogue acts: Intent
+State tracking
+Dialogue policy: What to say
+Task completion
+
+## Zero-shot and Few-shot Learning
+
+### Zero-shot Learning
+
+No examples for target task
+Use task description
+Transfer from pre-training
+GPT-3 does this
+Remarkable capability
+
+### Attribute-based Approach
+
+Define attributes of classes
+Example: Birds have feathers, wings
+Classify by attribute
+Semantic bridge
+Limited to known attributes
+
+### Few-shot Learning
+
+K examples per class
+K=1: One-shot
+K=5: Few-shot
+Meta-learning: Learn to learn
+MAML popular method
+
+### Prototypical Networks
+
+Average embedding per class
+Prototype is class center
+Classify by distance to prototype
+Simple and effective
+Works surprisingly well
+
+### Domain Generalization
+
+Zero-shot to unseen domain
+Different text distribution
+Pre-training helps
+Multi-domain training
+Open challenge
+
+## Active Learning
+
+### Motivation
+
+Labeling is expensive
+Which examples to label?
+Active learning answers this
+Iterative process
+Select informative examples
+
+### Uncertainty Sampling
+
+Label most uncertain examples
+Model confidence low
+Expected to be informative
+Easy to implement
+Often effective
+
+### Query by Committee
+
+Ensemble of models
+Label examples where disagreement
+High information
+More expensive
+Better performance
+
+### Expected Model Change
+
+Will example change model?
+Gradient-based
+Computationally expensive
+Principled approach
+Highest quality
+
+### Core-set Approach
+
+Select diverse examples
+Represent data distribution
+Minimize coverage
+Geometric approach
+Works well
+
+## Transfer Learning
+
+### Pre-training Strategy
+
+Large unlabeled data
+Learn general representations
+Fine-tune on target task
+Huge improvement
+Modern default approach
+
+### Domain Adaptation
+
+Source and target different
+Continued pre-training helps
+Adversarial training
+Domain discriminator
+Make representations invariant
+
+### Task Similarity
+
+More similar tasks help more
+Source: Classification
+Target: Classification
+vs target: Generation
+Related tasks better
+
+### Catastrophic Forgetting
+
+Fine-tune on target
+Forget source task
+Problem in continual learning
+Elastic weight consolidation
+Parameter isolation
+
+### Multi-task Learning
+
+Shared representations
+Multiple task losses
+Auxiliary tasks help
+Regularization effect
+Parameter sharing
+
+## Data Augmentation
+
+### Back-translation
+
+Translate to intermediate language
+Translate back
+Paraphrase created
+Preserves meaning
+Very effective
+
+### EDA: Easy Data Augmentation
+
+Random insertion
+Random deletion
+Random swap
+Synonym replacement
+Simple but surprisingly effective
+
+### Contextual Augmentation
+
+Language model based
+Replace words with LM predictions
+Preserves context
+Higher quality
+More computationally expensive
+
+### Mixup and Cutoff
+
+Mix embeddings of two examples
+Interpolate in embedding space
+Cutoff: Drop random tokens
+Regularization
+Helps generalization
+
+### Self-training
+
+Use model on unlabeled data
+High confidence predictions
+Add to training set
+Iterative
+Semi-supervised approach
+
+## Robustness and Adversarial Examples
+
+### Adversarial Attacks
+
+Small perturbation
+Fool model
+Text: Word level
+Shows brittleness
+Security concern
+
+### FGSM Attack
+
+Fast gradient sign method
+Gradient of loss wrt input
+Step in gradient direction
+Simple and effective
+Baseline attack
+
+### Adversarial Training
+
+Generate adversarial examples
+Train on both original and adv
+More robust model
+Cost: Slower training
+Better generalization
+
+### Certified Robustness
+
+Provable robustness
+Randomized smoothing
+Guarantees within epsilon
+Expensive
+Research active
+
+### Out-of-distribution Detection
+
+Detect unusual inputs
+Maximum softmax
+Energy-based score
+Mahalanobis distance
+Safety-critical systems
+
+## Explainability and Interpretability
+
+### Attention Visualization
+
+Heatmap of weights
+What model attends to
+Interpretable but limited
+Not complete explanation
+Useful diagnostic
+
+### Feature Attribution
+
+Gradient-based
+Integrated gradients
+Path integration
+Baseline approach
+Accumulate gradients
+
+### LIME
+
+Local interpretable model
+Approximate with simple model
+Around prediction
+Perturb inputs
+Fit linear model
+
+### SHAP
+
+Shapley values
+Game theory
+Fair feature contribution
+Expensive
+Gold standard
+
+### Probing Tasks
+
+Train classifier on hidden states
+What information is encoded
+Layer-wise analysis
+Reveals learned structure
+Syntactic vs semantic
+
+## Biomedical NLP
+
+### Challenges
+
+Specialized vocabulary
+Domain-specific entities
+Complex syntax
+Limited labeled data
+High stakes
+
+### Named Entity Recognition
+
+Disease, drug, gene entities
+Datasets: NCBI, BC5CDR
+Domain-specific embeddings
+BERT variants: SciBERT
+Much better than generic
+
+### Relation Extraction
+
+Drug-disease interactions
+Protein-protein interactions
+Knowledge base construction
+Semi-supervised approaches
+Limited labeled data
+
+### Question Answering
+
+Biomedical literature QA
+BioASQ challenge
+Multi-document reasoning
+Retrieved documents
+Evidence extraction
+
+### Pre-training Domain
+
+SciBERT: Scientific text
+BioBERT: Biomedical focus
+Continue pre-training
+Better than generic
+Transfer to tasks
+
+## Legal NLP
+
+### Document Understanding
+
+Long documents: 10K+ tokens
+Hierarchical structure
+Sections and subsections
+Cross-references
+Complex reasoning
+
+### Case Outcome Prediction
+
+Predict court decision
+Multiple factors
+Data: CASELAW database
+Feature extraction
+LSTM and transformers
+
+### Contract Analysis
+
+Clause extraction
+Risk identification
+Payment terms
+Liability clauses
+Automated review
+
+### Legal Information Retrieval
+
+Find relevant case law
+Precedent search
+Dense retrieval helps
+Legal-specific models
+LegalBERT
+
+### Dataset and Challenges
+
+SCOTUS: Supreme Court
+CASELAW: Large corpus
+Data license restrictions
+Domain shift
+Emerging field
+
+## Financial NLP
+
+### Sentiment Analysis
+
+Stock price prediction
+News sentiment
+Social media monitoring
+Earnings calls
+Financial-specific lexicon
+
+### Entity Extraction
+
+Company names
+Stock symbols
+Financial instruments
+Named entity recognition
+Domain-specific
+
+### Event Extraction
+
+Mergers and acquisitions
+Earnings announcements
+Regulatory filings
+Market events
+Impact prediction
+
+### Price Movement Prediction
+
+Text features for regression
+Sentiment + technical indicators
+Ensemble approaches
+Challenge: Market efficiency
+Limited predictability
+
+### Domain Resources
+
+FinBERT: Financial text
+Financial corpora
+Specialized embeddings
+Lexicon-based approaches
+Hybrid methods
+
+## Social Media and Noisy Text
+
+### Challenges
+
+Misspellings
+Abbreviations
+Slang and informal
+Code-switching
+Short length
+
+### Text Normalization
+
+Correct spellings
+Expand abbreviations
+Neural approaches
+Rule-based methods
+Hybrid systems
+
+### Sarcasm Detection
+
+Binary classification
+Context dependent
+Hard for humans
+Datasets: SemEval
+Contextual embeddings help
+
+### Hate Speech Detection
+
+Toxic content flagging
+Content moderation
+False positives costly
+Interpretability crucial
+Explainable AI needed
+
+### Rumor and Misinformation
+
+Identify false claims
+Verification
+Evidence retrieval
+Fact-checking
+Emerging challenge
+
+## Prompt Engineering
+
+### Introduction
+
+Instructions to language model
+Quality impacts output
+Art and science
+Counter-intuitive patterns
+Rapidly evolving field
+
+### Prompt Design Patterns
+
+Task description
+Few-shot examples
+Output format specification
+Role-playing
+System and user prompts
+
+### Few-shot Prompting
+
+In-context learning
+Example demonstrations
+Format consistency
+Example selection matters
+Small data regime
+
+### Chain of Thought
+
+Intermediate reasoning steps
+Improve performance
+Explainability bonus
+Self-consistency
+Ensemble of prompts
+
+### Advanced Techniques
+
+Temperature and top-k
+Decoding strategies
+System prompt tuning
+Instruction engineering
+Best practices evolving
+
+## Retrieval-Augmented Generation
+
+### Motivation
+
+Language models hallucinate
+Lack current information
+RAG solves this
+Retrieve + generate
+Better factuality
+
+### Architecture
+
+Retriever: Find documents
+Reader: Extract answer
+Or generator: Condition on docs
+Two-stage pipeline
+End-to-end training
+
+### Training
+
+Maximize relevance of retrieved docs
+Answer quality improves
+Hard negative mining
+Dense passage retrieval
+Joint optimization
+
+### Practical Implementation
+
+Vector database
+FAISS or Pinecone
+Latency matters
+Batch retrieval
+Production challenges
+
+### Evaluation
+
+Retrieval accuracy
+Answer correctness
+End-to-end metrics
+Human evaluation
+Trade-offs: Quality vs speed
+
+## Code Understanding and Generation
+
+### Models
+
+CodeBERT: Code and natural language
+GraphCodeBERT: Graph structure
+CodeT5: Code-aware T5
+GPT for code
+Specialized architectures
+
+### Code Search
+
+Find relevant code snippets
+Natural language query
+Dual encoders
+Github Copilot
+Developer productivity
+
+### Code Summarization
+
+Generate docstrings
+Seq2seq approaches
+Abstract syntax tree
+Comment generation
+Aids maintenance
+
+### Bug Detection
+
+Identify vulnerabilities
+Security critical
+Type inference
+Data flow analysis
+Static analysis tools
+
+### Code Generation
+
+Generate from specification
+Copilot popularity
+Evaluation: Functional correctness
+Hallucinations
+Security and privacy concerns
+
+## Multilingual and Cross-lingual NLP
+
+### Challenges
+
+Language diversity
+Resource variation
+Script differences
+Morphology variation
+Different structures
+
+### Multilingual Models
+
+mBERT: 104 languages
+XLM-R: 100+ languages
+Single shared vocabulary
+Cross-lingual transfer
+Emergent alignment
+
+### Zero-shot Language Transfer
+
+Train on source language
+Test on target language
+Shared representations
+Implicit alignment
+Surprisingly works
+
+### Machine Translation Directions
+
+High resource pairs: English-French
+Pivot approaches: Via English
+Back-translation scaling
+Low resource pairs
+Shared architecture helps
+
+### Code-switching
+
+Multiple languages in text
+Common in multilingual regions
+Switch point detection
+Task-specific challenges
+Growing research area
+
+## Speech and Audio NLP
+
+### Speech Recognition
+
+Acoustic to text
+Transformers revolutionized
+Wav2vec: Self-supervised
+Whisper: Robust recognition
+End-to-end approaches
+
+### Acoustic Features
+
+MFCCs: Classic features
+Spectrograms: Visual representation
+Log-mel features: Modern
+Feature learning: End-to-end
+Raw waveform approaches
+
+### Speech Synthesis
+
+Text to speech
+Vocoder generation
+Tacotron architecture
+Neural vocoders: WaveGlow
+Natural sounding
+
+### Speaker Recognition
+
+Identify who is speaking
+Speaker embedding
+Verification vs identification
+i-vectors and x-vectors
+Deep learning approaches
+
+### Speech Understanding
+
+Intent detection from speech
+Emotion recognition
+Prosody modeling
+End-to-end pipeline
+Speech-to-semantics
+
+## Temporal and Dynamic Language
+
+### Temporal Relation Extraction
+
+When did events occur?
+TimeML annotation
+Temporal reasoning
+Event ordering
+Challenging task
+
+### Time-aware Embeddings
+
+Temporal word embeddings
+Meaning shifts over time
+Track language evolution
+Multiple snapshots
+Alignment across time
+
+### News Summarization
+
+Recent events
+Update summarization
+Progressive disclosure
+Timeline generation
+Temporal coherence
+
+### Conversational Turns
+
+Context is dynamic
+Reference resolution
+Dialogue history modeling
+Sequential processing
+RNNs vs transformer position
+
+### Streaming and Online Learning
+
+Process continuously
+Can't reprocess
+Incremental algorithms
+Computational efficiency
+Online active learning
+
+## Long Document Processing
+
+### Challenges
+
+Context window limits
+Attention quadratic complexity
+Information loss
+Coherence over long range
+Computational cost
+
+### Hierarchical Attention
+
+Document structure
+Sentence level then document
+Two-tier attention
+Reduces computation
+Maintains quality
+
+### Efficient Transformers
+
+Sparse attention patterns
+Strided attention
+Local windowed
+Combination patterns
+Longformer, BigBird
+
+### Recurrence and Memory
+
+Maintain state across chunks
+Transformer-XL
+Recurrence without RNNs
+Segment-level recurrence
+Relative position encoding
+
+### Extraction from Long Docs
+
+Section-wise processing
+Aggregate results
+QA over long documents
+Key-phrase extraction
+Hierarchical methods
+
+## Bias and Fairness in NLP
+
+### Types of Bias
+
+Gender bias
+Racial bias
+Occupational stereotypes
+Inherent in data
+Models amplify
+
+### Measurement
+
+Bias benchmarks
+WinoBias, StereoSet
+Embedding association tests
+Contextual word embeddings
+Coverage of demographics
+
+### Mitigation Strategies
+
+Data balancing
+Debiasing embeddings
+Adversarial debiasing
+Neutral pronoun use
+Model regularization
+
+### Gender and Languages
+
+Grammatical gender
+Language structure effects
+Morphologically rich
+Translating bias
+Cross-lingual variation
+
+### Transparency and Documentation
+
+Model cards
+Dataset documentation
+Known limitations
+Stakeholder assessment
+Responsible AI
+
+## Privacy and Security
+
+### Privacy Concerns
+
+Training data leakage
+Extracting examples
+Memorization
+Differential privacy
+Privacy-preserving NLP
+
+### Membership Inference
+
+Was example in training?
+Privacy attack
+Language models vulnerable
+Memorization issue
+Quantify leakage
+
+### Federated Learning
+
+Decentralized training
+Data stays local
+Privacy-preserving
+Communication overhead
+Convergence challenges
+
+### Adversarial Robustness
+
+Character-level perturbations
+Semantic equivalence
+Generate adversarial text
+Defense mechanisms
+Security critical
+
+### Watermarking and Attribution
+
+Detect AI-generated text
+Copyright protection
+Source attribution
+Statistical signatures
+Emerging challenge
+
+## Efficient and Sustainable NLP
+
+### Model Compression
+
+Reduce model size
+Faster inference
+Lower memory
+Quantization
+Pruning techniques
+
+### Distillation
+
+Student learns from teacher
+Smaller model
+Similar performance
+Faster inference
+Knowledge transfer
+
+### Quantization Methods
+
+Post-training quantization
+Quantization-aware training
+Mixed precision
+8-bit, 4-bit, ternary
+Hardware acceleration
+
+### Pruning
+
+Remove unnecessary weights
+Structured vs unstructured
+Lottery ticket hypothesis
+Iterative pruning
+Speed-accuracy tradeoff
+
+### Environmental Impact
+
+Training carbon footprint
+Large models expensive
+Green NLP
+Efficiency research
+Sustainable AI
+
+## Edge Cases and Common Pitfalls
+
+### Domain Shift
+
+Train-test mismatch
+Covariate shift
+Label shift
+Degraded performance
+Domain adaptation help
+
+### Class Imbalance
+
+Skewed label distributions
+Rare minority class
+Threshold adjustment
+Reweighting
+Data augmentation
+
+### Ambiguity and Annotator Agreement
+
+Subjective tasks
+Multiple valid answers
+Sentiment nuance
+Inter-annotator agreement
+Understand ceiling
+
+### Temporal Degradation
+
+Model performance drops
+New data distribution
+Concept drift
+Seasonal patterns
+Continuous monitoring
+
+### Out-of-Distribution Examples
+
+Unusual inputs
+Distribution far from training
+Confidence inflation
+Uncertainty quantification
+Abstention mechanisms
+
+## Current Research Directions
+
+### Multimodality
+
+Beyond text
+Vision, audio, text
+Unified representations
+Grounding in reality
+Next frontier
+
+### In-context Learning
+
+Few-shot without gradient updates
+Remarkable capability
+Emerges with scale
+Mechanism unclear
+Theoretical understanding needed
+
+### Neurosymbolic AI
+
+Combine neural and symbolic
+Best of both worlds
+Interpretability + learnability
+Knowledge graphs integration
+Hybrid architectures
+
+### Continual Learning
+
+Learn from streams
+Avoid catastrophic forgetting
+Task incremental learning
+Replay mechanisms
+Plasticity-stability
+
+### Interpretable Machine Learning
+
+Understand models
+Probing and analysis
+Concept-based explanation
+Mechanistic understanding
+Long-term goal
+
+## Module-05 Comprehensive Summary
+
+### What We Covered
+
+Word embeddings: Static and contextual
+Language models: From BERT to GPT
+Instruction tuning and alignment
+NLP applications: Semantic search, QA, summarization
+Machine translation and translation
+
+### Continued Coverage
+
+Named entity recognition
+Sentiment and text classification
+Information extraction
+Vision-language models
+Graph neural networks
+
+### Practical Topics
+
+Zero-shot and few-shot learning
+Active learning and data augmentation
+Transfer learning and domain adaptation
+Robustness and adversarial learning
+Explainability and interpretability
+
+### Specialized Domains
+
+Biomedical NLP
+Legal and financial NLP
+Social media and noisy text
+Prompt engineering
+Retrieval-augmented generation
+
+### Advanced and Emerging Topics
+
+Code understanding and generation
+Multilingual and cross-lingual
+Speech and audio processing
+Long document understanding
+Privacy, fairness, efficiency
+Future directions
+
+Congratulations on completing module-05!
+
+## Lesson-01: Foundational Concepts
+
+### Learning Objectives
+
+Understand word embeddings
+Learn distributed representations
+Explore Word2Vec algorithms
+Understand skip-gram model
+Complete practical exercises
+
+### Word2Vec Detailed
+
+Skip-gram: Predict context from target
+CBOW: Predict target from context
+Negative sampling approximation
+Hierarchical softmax alternative
+Training details
+
+### GloVe and FastText
+
+Global vectors for word representation
+Matrix factorization approach
+FastText: Subword units
+Character n-grams
+Handle OOV words
+
+### Implementation Exercises
+
+Exercise 1: Train Word2Vec model
+Exercise 2: Explore embedding space
+Exercise 3: Semantic similarity tasks
+Exercise 4: Analogy solving
+Expected completion time: 2 hours
+
+### Project Checkpoint
+
+Build custom word embedding
+Train on specific corpus
+Evaluate on similarity dataset
+Document methodology
+Submit implementation
+
+## Lesson-02: ELMo and Contextualized Models
+
+### Learning Objectives
+
+Understand contextualization
+Learn bidirectional models
+Explore ELMo architecture
+Fine-tune pre-trained models
+Implement transfer learning
+
+### ELMo Deep Dive
+
+Bidirectional language models
+Forward and backward LSTMs
+Layer representation fusion
+Context-dependent embeddings
+Application to NLP tasks
+
+### Fine-tuning Techniques
+
+Layer-wise learning rates
+Small learning rates for pre-trained
+Larger rates for task layer
+Discriminative fine-tuning
+Gradual unfreezing
+
+### Benchmarking Tasks
+
+Sentiment analysis benchmark
+Text classification benchmark
+Compare with baselines
+Measure improvements
+Error analysis
+
+### Practical Implementation
+
+Use pre-trained ELMo weights
+Integration with PyTorch
+Fine-tune on specific task
+Evaluate performance
+Documentation required
+
+## Lesson-03: BERT and Transformer Models
+
+### Learning Objectives
+
+Understand BERT architecture
+Learn self-attention mechanism
+Explore pre-training objectives
+Fine-tune on downstream tasks
+Analyze learned representations
+
+### BERT Pre-training
+
+Masked language modeling
+15 percent masking strategy
+Next sentence prediction
+Joint objectives
+Pre-training details
+
+### Fine-tuning for Tasks
+
+Classification: Add linear layer
+Tagging: Per-token classification
+QA: Span extraction
+Similarities: Use CLS token
+Task-specific adapters
+
+### BERT Variants
+
+RoBERTa: Improved training
+ALBERT: Parameter reduction
+DistilBERT: Distilled smaller
+Comparison and selection
+Trade-offs
+
+### Analysis and Probing
+
+What does BERT learn?
+Probing linguistic knowledge
+Layer-wise analysis
+Attention head analysis
+Behavioral testing
+
+## Lesson-04: GPT and Autoregressive Models
+
+### Learning Objectives
+
+Understand autoregressive generation
+Learn GPT architecture
+Explore scaling laws
+Implement prompt engineering
+Build generation pipelines
+
+### GPT Architecture
+
+Decoder-only transformers
+Causal self-attention
+Left-to-right generation
+Token prediction
+Differences from BERT
+
+### Generation Strategies
+
+Greedy decoding
+Beam search
+Top-k sampling
+Nucleus sampling (top-p)
+Temperature scaling
+
+### Scaling Laws
+
+Model size and performance
+Power law relationships
+Optimal allocation
+Data vs parameters
+Chinchilla scaling
+
+### Few-shot Learning
+
+In-context learning capability
+Example demonstrations
+Task specification
+Without fine-tuning
+Remarkable emergent ability
+
+## Lesson-05: Instruction Tuning and Alignment
+
+### Learning Objectives
+
+Understand instruction following
+Learn from human feedback
+Implement RLHF training
+Improve model safety
+Evaluate alignment
+
+### Instruction Tuning
+
+Convert tasks to instructions
+Train on diverse tasks
+Improve generalization
+Zero-shot capabilities
+Cross-task transfer
+
+### RLHF Process
+
+Reward model training
+Human preference data
+Policy gradient optimization
+Proximal policy optimization
+Iterative improvement
+
+### Safety and Alignment
+
+Reduce harmful outputs
+Encode human values
+Constitutional AI
+Self-improvement methods
+Evaluation frameworks
+
+### Practical Training
+
+Dataset preparation
+Reward model construction
+PPO implementation
+Monitoring training
+Evaluation metrics
+
+## Module-05 Capstone Project
+
+### Project Overview
+
+Build end-to-end NLP system
+Choose application domain
+Leverage learned techniques
+Deploy and evaluate
+Demonstrate mastery
+
+### Project Requirements
+
+Data collection and preprocessing
+Model selection and implementation
+Training and evaluation
+Error analysis
+Performance documentation
+
+### Suggested Projects
+
+Multi-task learning system
+Domain-specific QA system
+Multilingual translation pipeline
+Information extraction system
+Chat bot with persona
+
+### Evaluation Criteria
+
+Functionality: Does it work?
+Code quality and documentation
+Evaluation metrics
+Error analysis and insights
+Deployment readiness
+
+### Presentation and Submission
+
+Document methodology
+Show results and analysis
+Discuss limitations
+Future improvements
+Code repository link
+
+## Advanced Learning Resources
+
+### Key Papers
+
+Attention is All You Need
+BERT: Pre-training of Deep Bidirectional Transformers
+Language Models are Unsupervised Multitask Learners
+On the Opportunities and Risks of Foundation Models
+Read and understand
+
+### Online Courses
+
+Stanford CS224N: NLP with Deep Learning
+CMU CS11-711: Advanced NLP
+University of Edinburgh NLP
+DeepLearning.AI NLP specialization
+Comprehensive learning
+
+### Tools and Libraries
+
+HuggingFace Transformers
+PyTorch and TensorFlow
+OpenAI APIs
+LangChain
+Vector databases
+
+### Community and Forums
+
+HuggingFace forums
+NLP Reddit communities
+Twitter NLP researchers
+GitHub open source
+Collaborate and learn
+
+### Continuous Learning
+
+Follow research trends
+Implement latest papers
+Build projects
+Contribute to open source
+Never stop improving
+
+## Troubleshooting and Common Issues
+
+### Training Issues
+
+Loss not decreasing
+Model exploding gradients
+Out of memory
+Slow training
+Solutions and diagnostics
+
+### Inference Problems
+
+Inconsistent outputs
+Memory usage high
+Latency too slow
+Quality degradation
+Production debugging
+
+### Data Problems
+
+Class imbalance
+Data quality issues
+Label noise
+Distribution shift
+Data cleaning tips
+
+### Evaluation Challenges
+
+Metric mismatch
+Dataset bias
+Human evaluation setup
+Statistical significance
+Proper evaluation
+
+### Hyperparameter Tuning
+
+Learning rate selection
+Batch size effects
+Patience and early stopping
+Weight decay impact
+Systematic approach
+
+## Final Reflections
+
+### Journey Through NLP
+
+Started with word embeddings
+Progressed to transformers
+Explored specialized domains
+Learned practical techniques
+Ready for real-world applications
+
+### Key Takeaways
+
+Pre-training is powerful
+Transfer learning accelerates progress
+Attention mechanisms are fundamental
+Scale matters significantly
+Data quality crucial
+
+### Industry Applications
+
+Search and retrieval
+Question answering systems
+Content generation
+Sentiment and classification
+Information extraction
+
+### Research Frontiers
+
+Efficiency and scaling
+Multimodal understanding
+Grounding and embodiment
+Reasoning and planning
+Alignment and safety
+
+### Your Next Steps
+
+Choose a specialization
+Build portfolio projects
+Contribute to open source
+Stay updated with research
+Never stop learning
+
+### Congratulations!
+
+You have completed module-05
+Mastered modern NLP
+Ready for advanced topics
+Prepared for industry
+Excellent foundation built
+
+### Feedback and Community
+
+Share your projects
+Help others learn
+Discuss challenges
+Contribute insights
+Build the community
+
+### Additional Resources
+
+arXiv.org for latest papers
+GitHub for implementations
+Kaggle for competitions
+HuggingFace for models
+Endless learning possibilities
+
+### Module-05 Complete!
+
+All topics thoroughly covered
+250+ commits of learning
+Comprehensive curriculum
+Ready for mastery
+Keep practicing
+
+### Thank you for learning!
+
+This module represents
+Hours of research
+Curated knowledge
+Best practices
+Now it is your turn to excel
+
